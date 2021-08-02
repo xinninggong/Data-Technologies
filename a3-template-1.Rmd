@@ -1,0 +1,342 @@
+---
+title: Assignment 3
+output: 
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include = FALSE}
+library(knitr)
+opts_knit$set(root.dir = here::here())
+opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "#>", 
+  tidy = "styler", fig.retina = 3)
+```
+
+<!-- DO NOT edit anything above! -->
+
+```{r pkgs, echo = FALSE}
+# include all packages you need in this chunk
+library(rvest)
+library(lubridate)
+library(tidyverse)
+```
+
+```{r data-read}
+nycbikes18 <- read_csv("data/2018-citibike-tripdata.csv",
+  locale = locale(tz = "America/New_York"))
+```
+
+## Q1: Web scraping
+
+```{r web-scrape}
+member_link <- "https://www.citibikenyc.com/pricing"
+member <- read_html(member_link)
+
+plan <- member %>% 
+  html_elements(".spacing--one-and-half--above-xlarge") %>%
+  html_elements(".type-alpha--l") %>%
+  html_text2()
+
+price <- member %>% 
+  html_elements(".type-alpha--m") %>%
+  html_text2()
+
+minute <-  member %>% 
+  html_elements(".spacing--one-and-half--above-xlarge") %>%
+  html_elements(".type-alpha--s") %>%
+  html_text2()
+
+plan_tibble <- tibble(plan, price, minute) %>% 
+  rename(Plan = plan, 
+         Price = price, 
+         Minutes = minute)
+kable(plan_tibble)
+```
+
+## Q2: Critique
+
+The issue with Assignment 2 Question 4 is that the lower age groups that we set are from 0-14 and 15-24 years old. However, upon closer inspection of the agreement to Citi Bike Rental you will see that people under the age of 16 may not ride the bicycles. Thus, we would not expect any of the subscriptions to be purchased by someone under 16. 
+
+Hence to improve our analysis to fit the context we should change the age groups and start from the age of 16 or above. 
+
+Reference: Inc., M. (2019). Citi Bike Rental Agreement. Retrieved 27 May 2021, from https://assets.citibikenyc.com/rental-agreement.html#section_1
+
+## Q3: Polishing
+
+```{r polish}
+age_brk <- c(0, 14, 24, 44, 64, Inf)
+nycbikes18_age <- nycbikes18 %>% 
+  mutate(
+    tripduration = tripduration / 60,
+    birth_year = case_when(birth_year < 1900 ~ NA_real_, TRUE ~ birth_year),
+    age = 2018 - birth_year,
+    age_group = cut(age, age_brk, include.lowest = TRUE),
+    age_group = fct_recode(age_group, "65+" = "(64,Inf]")
+  )
+
+p1 <- nycbikes18_age %>% 
+  group_by(month = month(starttime, label = TRUE), age_group) %>% 
+  summarise(qtl_tripd = quantile(tripduration, 0.75)) %>% 
+  mutate(age_group = fct_reorder2(age_group, month, qtl_tripd)) %>%
+  ungroup() %>% 
+  ggplot(aes(month, qtl_tripd, group = age_group)) +
+  geom_line(aes(colour = age_group)) + 
+  labs(x = "Month", 
+       y = "Trip Duration (minutes)",
+       title= "Citi Bike monthly 3rd quantile trip durations",
+       subtitle = "Data for year of 2018",
+       caption = " Data: Citi Bike NYC Trip Histories") + 
+  guides(col = guide_legend(("Age Groups"))) + 
+  theme_minimal() +
+  theme(legend.position = "top", 
+        plot.title = element_text(face = "bold"),
+        axis.text = element_text(size = 10),
+        plot.margin = margin(10, 10, 10, 10)) +
+  scale_x_discrete(expand = expansion()) + 
+  geom_label(aes(x = "Jul", y = max(qtl_tripd)), 
+             label = "Dockless bike-sharing pilot released in July",
+             nudge_y = 2, 
+             nudge_x = .5,
+             size = 3.5, 
+             colour = "#7CAE00") + 
+  ylim(c(5, 20)) + 
+  geom_point(aes(x = "Jul", y = max(qtl_tripd)), 
+             colour = "#7CAE00")
+p1
+```
+
+## Q4: Exploration
+```{r}
+### Number of trips by month of starttime and usertype
+
+nycbikes18_age$month = month(nycbikes18_age$starttime, label = TRUE)
+
+p2 <- nycbikes18_age %>% 
+  group_by(month, usertype) %>% 
+  summarise(ntrips = n()) %>% 
+  ungroup() %>% 
+  ggplot(aes(month, ntrips, group = usertype)) + 
+  geom_line(aes(colour = usertype)) + 
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold"),
+    axis.text = element_text(size = 10)) + 
+  labs(
+    x = "Month",
+    y = "Number of trips", 
+    title = "Total number of monthly trips for different user types", 
+    subtitle = "Data for year of 2018", 
+    caption = " Data: Citi Bike NYC Trip Histories"
+  ) + 
+  guides(col = guide_legend("User type")) 
+
+p2
+```
+
+I wanted to know if more customers or subscribers were using the service on a monthly basis and what factors could be affecting the number of trips. Are subscribers getting their monies worth for bike trips? 
+
+I found that for every month, there was a higher number of trips by subscribers compared to customers. There was a steady increase in the number of trips by subscribers and customers after April. This increase is much larger for subscribers than customers. 
+
+Noticeably, the highest number of bike trips was July for customers and August for Subscribers. This could be due to the fact that dockless bike-sharing pilot was rolled out in New York in July 2018. This provided hundreds of more bikes around the area. More bikes means more exposure to customers. Customers may have been curious about the new bikes around and decided to purchase a pass to try it out. 
+
+I did some research regarding the average temperature in New York each month. (Refer to appendix 1)
+
+I found the average temperature in New York City each month. You can see some similarity between the trends for subscribers number of trips and somewhat of a pattern with the customers. This may be because subscribers have subscribed to the plan for the full year but won't use the bikes as frequently until the warmer months. 
+
+Another factor could be how the rain each month as people would likely prefer other forms of transport than biking if it's raining. Customers who may use citi bikes as a leisure activity would also less likely want to ride bikes for fun if it is raining. 
+
+Since we found subscribers have completed more bike rides than customers each month, I wanted to see how this would affect total trip duration. 
+```{r}
+### Total monthly trip duration for different usertypes
+total_tripduration <- nycbikes18_age %>%
+  group_by(month, usertype) %>% 
+  summarise(tripduration = sum(tripduration)) %>% 
+  ggplot(aes(month, tripduration, group = usertype)) + 
+  geom_col(aes(fill = usertype), position = "dodge") + 
+  scale_y_continuous(labels = scales::label_comma()) + 
+  labs (x = "Month", 
+        y = "Total trip duration (minutes)",
+        title = "Total monthly trip durations for different user types",     
+        subtitle = "Data for year of 2018",
+        caption = " Data: Citi Bike NYC Trip Histories"
+        ) + 
+  theme_minimal() + 
+    theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold"),
+    axis.text = element_text(size = 10)
+  ) + 
+  guides(col = guide_legend("User type"))
+
+total_tripduration
+```
+
+The plot shows that subscribers had a higher total trip duration each month than customers. This was expected as subscribers also had a higher number of monthly trips. The total trip durations are a lot lower during the colder months, especially for customers. The total trip durations then increase in the warmer months and then decrease once it gets cooler.
+
+I thought that the trip durations could be higher during summer and lower during winter due to the seasons. However, upon further investigation (see appendix 2), it seems that on average the trip durations are still very similar regardless of trip durations. Winter for customers is the only season which seems to have a lower middle 50% for trip duration compared to the other seasons. Therefore, the seasons may have a weak effect on trip durations for subscribers and customers. 
+
+We can see that the trend of trip durations for subscribers is very similar to the number of trips for subscribers in the first plot but there are some differences for customers. 
+
+A potential reason why customers could have a higher trip duration during the warmer months is because tourists are more likely to purchase a 24 hour or 3 day pass than an annual pass. Hence tourists are more likely to be customers. There may be more tourists during summer which is a nice time to ride bikes compared to winter which is another peak tourist time. 
+
+This lead to think since customers can buy 24-hour or 3 day passes, are they more likely to use bikes on the weekend? 
+
+```{r}
+p11 <- nycbikes18_age %>% 
+  group_by(startday = wday(starttime, label = TRUE, week_start = 1), usertype) %>% 
+  summarise(ntrips = n()) %>% 
+  ungroup() %>% 
+  ggplot(aes(usertype, ntrips))+ 
+  geom_col(aes(fill = startday), position = "dodge")  + 
+  labs (x = "User Type", 
+        y = "Total number of trips",
+        title = "Total number of trips for user types by day of week",     
+        subtitle = "Data for year of 2018",
+        caption = " Data: Citi Bike NYC Trip Histories"
+        ) + 
+  theme_minimal() + 
+    theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold"),
+    axis.text = element_text(size = 10)
+  ) + 
+  guides(fill = guide_legend(nrow = 1, title = "Day of week")) 
+
+p11
+```
+
+This plot reveals that customers will complete more trips during the weekends and subscribers will complete more trips during the weekdays. This could be due to more subscribers using the bikes as work transport during weekdays while more customers use bikes as a leisure activity weekends. 
+
+In conclusion, from the data I have learnt that, on average, there are more number of trips by subscribers than customers. This was surprising as on December 2018 the monthly report created by Citi Bike showed that there were 3653 annual members and 33,965 casual members. Hence, there are a lot more customers than subscribers but it appears that subscribers will complete more rides on average over the year due to the annual subscription while customers make one off purchases for a 24 hour or 3 day pass. 
+
+The release of dockless bike-sharing pilot rolled out in July may have been a big impact in attracting new customers and more accessibility for subscribers. 
+
+Another impact on the total number of trips for each month, could have been the seasons as I believe more people would like to ride bikes during warmer weather for going to work or for leisure. 
+
+We would need to see the data across different years to determine how much the increase in bikes in July actually affected the total number of trips or whether this was just due to other factors such as the weather.
+
+Total trip durations for subscribers appeared to be more affected by the total number of trips made monthly while the total trip durations for customers may have been affected by the season and tourism. Summer would be a nice season to go on long sightseeing bike rides or along cycle ways. In addition, season may have less of an effect on the total trip durations as it appears that many subscribers may be using the bikes as a means of work transport. This would likely be the same distance to and from work hence, the trip duration wouldn't change a lot.  
+
+Other questions the exploration raised was did the temperature affect the trip duration? To further investigate this question I would need the daily temperature data of NYC for 2018 which I wasn't able to find. This would bring insight on whether temperature really had an effect on the trip duration. Are the users more likely to ride bikes if the weather is good? 
+
+Another question that is pretty similar is how did rain affect the bike trips? I would look at whether there were less trips during rainy days and how this differed between customers and subscribers.Would the subscribers which use the bikes to go to work still ride during rainy days? 
+
+Lastly, I also wanted to find out more about the costs of each bike trip but I wasn't able to find this data and it was quite difficult to try to predict the costs due to many different factors like different membership costs and bike options. This would have been interesting and may show where to place bikes to better target users which would travel for longer and thus have a higher bike cost. 
+
+If we also had the data on each individual user, then this would also have helped determine whether subscribers are really getting their monies worth for bike rides. Are they making the most of their annual subscription fees or would they be better of paying as casual customers? We could look at this by seeing how much each individual subscriber spent on bike trips in the year and whether this would have been cheaper if they were not an annual member. 
+
+## Appendix 1: Average temperatures
+
+```{r}
+weather_link <- "https://www.timeanddate.com/weather/usa/new-york/climate"
+weather <- read_html(weather_link)
+
+temperature <- weather %>%
+  html_elements(".climategraph__high-label") %>%
+  html_text2()
+
+### I tried to scrape directly from a website but the text was not appearing. I also tried to do this from several websites but they were all not showing hence I decided to hard code the averages. 
+  
+### Plot of monthly average temperature in NYC
+avg_temp <- c(31.7, 42.0, 40.1, 49.5, 66.9, 71.7, 77.6, 78.1, 70.7, 57.7, 44.4)
+
+nycbikes18_temp <- nycbikes18_age %>% 
+  distinct(month) %>%
+  mutate(avg_temp = avg_temp)
+  
+p9 <- nycbikes18_temp %>% 
+  ggplot(aes(month, avg_temp)) +
+  geom_col()
+
+p9
+```
+
+The data above shows temperatures in fahrenheit. I tried to find the actual temperature data for every day in NYC 2018 but I was unable to find it. I think this could have shown a lot of insights regarding weather and biking patterns.
+
+## Appendix 2: Seasons
+```{r}
+### Creating the seasons 
+nycbikes18_season <- nycbikes18_age %>%
+  mutate(month = month(starttime),
+         startdate = as_date(starttime),
+         startwday = wday(starttime, label = TRUE, week_start = 1),
+         season = case_when(
+           month == 12 | month <= 2 ~ "Winter",
+           month <= 5 ~ "Spring",
+           month <= 8 ~ "Summer", 
+           month <= 11 ~ "Autumn"
+         )
+  ) 
+
+### Checking the seasons are correct
+nycbikes18_season %>% 
+ group_by(season) %>% 
+  summarise(unique(month))
+
+### Age vs Tripduration with the season and usertype
+p7 <- nycbikes18_season %>% 
+  ggplot(aes(age, tripduration)) + 
+  geom_line(aes(group = startdate), colour = "grey", alpha = 0.5) +
+  facet_grid(usertype ~ season, scales = "free_y")
+
+
+p7
+
+### Tripdurations for each season with different usertypes
+p8 <- nycbikes18_season %>%
+  ggplot(aes(season, tripduration)) + 
+  geom_boxplot(aes(colour = usertype)) + 
+  scale_y_log10() 
+
+p8
+
+
+```
+
+Above I thought of splitting into seasons and running analysis there but as we don't have additional years of data I thought there was not much point as you wouldn't be able to compare the seasonal data across the years. For just 2018 data, comparing months may be more informative. If I had a lot of years data, seasonal comparison may have been good.
+
+## Appendix 3: Other explorations
+```{r}
+monthly_tripd <- nycbikes18_age %>% 
+  group_by(age_group, usertype, month) %>% 
+  summarise(tripduration = mean(tripduration))
+  
+
+p10 <- nycbikes18_age %>% 
+  ggplot(aes(x = month, y = tripduration)) + 
+  geom_point(alpha= 0.5) +
+  geom_line(aes(group = usertype,colour = age_group), size =1, data = monthly_tripd) + 
+  facet_grid(vars(usertype), vars(age_group), scales = "free_y") + 
+  scale_y_log10()
+
+p10
+```
+
+### Appendix 4: Attempt to explore pricing
+
+```{r}
+subscriber_fee <- 0.49
+customer_fee <- 15 
+additional_fee <- 0.267
+subscriber_min <- 45 
+customer_min <- 30 
+pricing <- nycbikes18_age %>% 
+  mutate(base = case_when(
+    usertype == "Subscriber" ~ subscriber_fee
+  )
+  )
+```
+
+I found it interesting that in our data the user type is split into customer and subscribers. Subscribers are annual members and customers are 24 hour pass or 3 day pass users. However, you are no longer able to purchase a 3 day pass. There is now single rides, day passes and annual memberships. 
+
+From the citibike website I found that the pricing after the first 30 minutes is $4 for every 15 minutes customers and after the first 45 minutes for subscribers. Therefore, the additional fee per minute is $0.267. 
+
+Earlier we webscrapped that 'day pass' which is our customer user type is $15 a day and the annual membership is $15 a month which would be $180 for the year and $0.49 for a day. 
+
+As our data does not account for how many times one person rides the bike, I will just assume that the same person cannot ride the bike in the same day. I can also not take into account that the subscriber will pay regardless of whether they ride as we don't have the data about how many subscribers there are. Unfortunately, I have reached a dead end as I wanted to calculate a base price for each ride to then do analysis on the profit. However, I don't think it would be a good representation of the actual price per ride and would be more useful if we actually had the data on the costs for each bike rather than predicting it. There are also other factors that would be hard to take account of e.g e-bikes and certain memberships have a different rate. Hence I decided to stop there. 
+
+
+ 
