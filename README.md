@@ -1,6 +1,6 @@
 # stats220
 What I've been learning in stats220 data technologies 
-- Most of it consists of using R Markdown to analyse data
+- Most of it consists of using R to analyse data
 
 ## Labs 
 * Lab01 Basic maths calculations using R Markdown 
