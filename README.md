@@ -13,7 +13,7 @@ What I've been learning in stats220 data technologies
 * Lab08 Using data visualisation on auckland aqi data 
 * Lab09 Using web scraping on imdb movie data 
 * Lab10 Using text mining on animal crossing data 
-* Lab 11 Using data wrangling on auckland bus data
+* Lab11 Using data wrangling on auckland bus data
 
 ## Assignments 
 Assignment 1 
