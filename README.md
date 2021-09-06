@@ -1,4 +1,4 @@
-# stats220
+# Data Technologies
 What I've been learning in stats220 data technologies 
 - Most of it consists of using R to analyse data
 
