@@ -24,4 +24,4 @@ Assignment 2
 
 Assignment 3 
 * Web scraping, data wrangling, visualisation and research on bike data 
-* View here: https://htmlpreview.github.io/?https://github.com/xinninggong/Data-Technologies/blob/main/a3-template-1.html
+* View here: https://htmlpreview.github.io/?https://github.com/xinninggong/Data-Technologies/blob/main/assignment3.html
